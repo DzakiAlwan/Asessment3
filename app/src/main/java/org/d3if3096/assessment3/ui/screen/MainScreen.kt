@@ -12,7 +12,6 @@ import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.items
@@ -68,6 +67,7 @@ import org.d3if3096.assessment3.network.ApiStatus
 import org.d3if3096.assessment3.network.ProductApi
 import org.d3if3096.assessment3.network.UserDataStore
 import org.d3if3096.assessment3.ui.theme.Assessment3Theme
+
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun MainScreen() {
