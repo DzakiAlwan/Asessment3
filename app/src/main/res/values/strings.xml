@@ -7,4 +7,10 @@
     <string name="tutup">Tutup</string>
     <string name="logout">Logout</string>
     <string name="tambah_product">Tambah product</string>
+    <string name="nama_product">Nama Product</string>
+    <string name="harga">Harga</string>
+    <string name="batal">Batal</string>
+    <string name="simpan">Simpan</string>
+    <string name="pesan_hapus">Apakah Anda Yakin?</string>
+    <string name="hapus">Hapus</string>
 </resources>

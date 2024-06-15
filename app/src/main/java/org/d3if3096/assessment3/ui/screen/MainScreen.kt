@@ -8,6 +8,7 @@ import android.graphics.ImageDecoder
 import android.os.Build
 import android.provider.MediaStore
 import android.util.Log
+import android.widget.Toast
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -15,6 +16,7 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
@@ -35,6 +37,7 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -88,11 +91,17 @@ fun MainScreen() {
     val dataStore = UserDataStore(context)
     val user by dataStore.userFlow.collectAsState(User())
 
+    val viewModel: MainViewModel = viewModel()
+    val errorMessage by viewModel.errorMessage
+
     var showDialog by remember { mutableStateOf(false) }
+
+    var showProductDialog by remember { mutableStateOf(false) }
 
     var bitmap: Bitmap? by remember { mutableStateOf(null) }
     val launcher = rememberLauncherForActivityResult(CropImageContract()) {
         bitmap = getCroppedImage(context.contentResolver, it)
+        if (bitmap != null) showProductDialog = true
     }
 
     Scaffold(
@@ -106,18 +115,19 @@ fun MainScreen() {
                     titleContentColor = MaterialTheme.colorScheme.primary,
                 ),
                 actions = {
-                    IconButton(onClick = {
-                        if (user.email.isEmpty()) {
-                            CoroutineScope(Dispatchers.IO).launch { signIn(context, dataStore) }
-                        }
-                        else {
-                            showDialog = true
-                        }
+                    IconButton(
+                        onClick = {
+                            if (user.email.isEmpty()) {
+                                CoroutineScope(Dispatchers.IO).launch {
+                                    signIn(context, dataStore)
+                                }
+                            } else {
+                                showDialog = true
+                            }
                     }) {
                         Icon(
-                            painter = painterResource(R.drawable.baseline_account_circle_24),
-                            contentDescription = stringResource(R.string.profil),
-                            tint = MaterialTheme.colorScheme.primary
+                            painter = painterResource(id = R.drawable.baseline_account_circle_24),
+                            contentDescription = stringResource(id = R.string.profil),
                         )
                     }
                 }
@@ -141,7 +151,7 @@ fun MainScreen() {
             }
         }
     ) { padding ->
-        ScreenContent(Modifier.padding(padding))
+        ScreenContent(viewModel,user.email,Modifier.padding(padding))
 
         if (showDialog) {
             ProfilDialog(
@@ -151,19 +161,36 @@ fun MainScreen() {
                 showDialog = false
             }
         }
+
+        if (showProductDialog) {
+            ProductDialog(
+                bitmap = bitmap,
+                onDismissRequest = { showProductDialog = false }) { product, price ->
+                viewModel.saveData(user.email, product, price, bitmap!!)
+                showProductDialog = false
+            }
+        }
+        if (errorMessage != null) {
+            Toast.makeText(context, errorMessage, Toast.LENGTH_LONG).show()
+            viewModel.clearMessage()
+        }
     }
 }
 
 @Composable
-fun ScreenContent(modifier: Modifier) {
-    val viewModel: MainViewModel = viewModel()
+fun ScreenContent(viewModel: MainViewModel,userId: String, modifier: Modifier) {
+
     val data by viewModel.data
     val status by viewModel.status.collectAsState()
+
+    LaunchedEffect(userId) {
+        viewModel.retrieveData(userId)
+    }
 
     when (status) {
         ApiStatus.LOADING -> {
             Box(
-                modifier = Modifier.fillMaxSize(),
+                modifier = modifier.fillMaxSize(),
                 contentAlignment = Alignment.Center
             ) {
                 CircularProgressIndicator()
@@ -172,11 +199,17 @@ fun ScreenContent(modifier: Modifier) {
 
         ApiStatus.SUCCESS -> {
             LazyVerticalGrid(
-                modifier = modifier.fillMaxSize().padding(4.dp),
+                modifier = modifier
+                    .fillMaxSize()
+                    .padding(4.dp),
                 columns = GridCells.Fixed(2),
                 contentPadding = PaddingValues(bottom = 80.dp)
             ) {
-                items(data) { ListItem(product = it) }
+                items(data) {
+                    ListItem(product = it) {
+                        viewModel.deleteProduct(userId, it.id)
+                    }
+                }
             }
         }
 
@@ -188,7 +221,7 @@ fun ScreenContent(modifier: Modifier) {
             ) {
                 Text(text = stringResource(id = R.string.error))
                 Button(
-                    onClick = { viewModel.retrieveData() },
+                    onClick = { viewModel.retrieveData(userId) },
                     modifier = Modifier.padding(top = 16.dp),
                     contentPadding = PaddingValues(horizontal=32.dp, vertical=16.dp)
                 ) {
@@ -200,7 +233,8 @@ fun ScreenContent(modifier: Modifier) {
 }
 
 @Composable
-fun ListItem(product: Product) {
+fun ListItem(product: Product,delete: () -> Unit) {
+    var showDeleteDialog by remember { mutableStateOf(false) }
     Box(
         modifier = Modifier.padding(4.dp).border(1.dp, Color.Gray),
         contentAlignment = Alignment.BottomCenter
@@ -210,7 +244,7 @@ fun ListItem(product: Product) {
                 .data(ProductApi.getProductUrl(product.imageId))
                 .crossfade(true)
                 .build(),
-            contentDescription = stringResource(R.string.gambar, product.nama),
+            contentDescription = stringResource( id = R.string.gambar, product.product ?: ""),
             contentScale = ContentScale.Crop,
             placeholder = painterResource(id = R.drawable.loading_img),
             error = painterResource(id = R.drawable.baseline_broken_image_24),
@@ -221,19 +255,49 @@ fun ListItem(product: Product) {
                 .background(Color(red = 0f, green = 0f, blue = 0f, alpha = 0.5f))
                 .padding(4.dp)
         ) {
-            Text(
-                text = product.nama,
-                fontWeight = FontWeight.Bold,
-                color = Color.White
-            )
-            Text(
-                text = product.deskripsi,
-                fontStyle = FontStyle.Italic,
-                fontSize = 14.sp,
-                color = Color.White
-            )
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Column {
+                    Text(
+                        text = product.product ?: "",
+                        fontWeight = FontWeight.Bold,
+                        color = Color.White
+                    )
+                    Text(
+                        text = product.price ?: "",
+                        fontStyle = FontStyle.Italic,
+                        fontSize = 14.sp,
+                        color = Color.White
+                    )
+                }
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(4.dp),
+                    horizontalArrangement = Arrangement.End
+                ) {
+                    IconButton(onClick = { showDeleteDialog = true }) {
+                        Icon(
+                            tint = Color.White,
+                            painter = painterResource(R.drawable.baseline_delete_24),
+                            contentDescription = stringResource(R.string.profil)
+                        )
+                    }
+                }
+            }
         }
     }
+    DeleteDialog(
+        openDialog = showDeleteDialog,
+        onDismissRequest = { showDeleteDialog = false }
+    ) {
+        delete()
+        showDeleteDialog = false
+    }
+
 }
 
 private suspend fun signIn(context: Context, dataStore: UserDataStore) {
@@ -260,11 +324,11 @@ private suspend fun handleSignIn(result: GetCredentialResponse, dataStore: UserD
     if (credential is CustomCredential &&
         credential.type == GoogleIdTokenCredential.TYPE_GOOGLE_ID_TOKEN_CREDENTIAL) {
         try {
-            val googleIdToken = GoogleIdTokenCredential.createFrom(credential.data)
-            val nama = googleIdToken.displayName ?: ""
-            val email = googleIdToken.id
-            val photoUrl = googleIdToken.profilePictureUri.toString()
-            dataStore.saveData(User(nama, email, photoUrl))
+            val googleId = GoogleIdTokenCredential.createFrom(credential.data)
+            val name = googleId.displayName ?: ""
+            val email = googleId.id
+            val photoUrl = googleId.profilePictureUri.toString()
+            dataStore.saveData(User(name, email, photoUrl))
         } catch (e: GoogleIdTokenParsingException) {
             Log.e("SIGN-IN", "Error: ${e.message}")
         }
@@ -285,6 +349,7 @@ private suspend fun signOut(context: Context, dataStore: UserDataStore) {
         Log.e("SIGN-IN", "Error: ${e.errorMessage}")
     }
 }
+
 
 private fun getCroppedImage(
     resolver: ContentResolver,
