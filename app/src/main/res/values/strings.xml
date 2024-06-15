@@ -11,6 +11,6 @@
     <string name="harga">Harga</string>
     <string name="batal">Batal</string>
     <string name="simpan">Simpan</string>
-    <string name="pesan_hapus">Apakah Anda Yakin?</string>
+    <string name="pesan_hapus">Apakah Anda Yakin Ingin Menghapusnya?</string>
     <string name="hapus">Hapus</string>
 </resources>
